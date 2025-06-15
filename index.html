@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Heart Animation Optimized</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+    }
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<canvas id="effectCanvas"></canvas>
+<script>
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const effectCanvas = document.getElementById('effectCanvas');
+  const fxCtx = effectCanvas.getContext('2d');
+
+  function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    effectCanvas.width = window.innerWidth;
+    effectCanvas.height = window.innerHeight;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const shrinkRatio = 20;
+  const heartColor = '#e77c8e';
+
+  function heartFunction(t) {
+    const x = 16 * Math.pow(Math.sin(t), 3);
+    const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+    return {
+      x: x * shrinkRatio + centerX,
+      y: -y * shrinkRatio + centerY
+    };
+  }
+
+  const heartPoints = [];
+  for (let t = 0; t < Math.PI * 2; t += 0.01) {
+    for (let r = 0.02; r <= 1; r += 0.03) { // ít vân hơn để đỡ lag
+      const point = heartFunction(t);
+      heartPoints.push({
+        x: centerX + (point.x - centerX) * r,
+        y: centerY + (point.y - centerY) * r
+      });
+    }
+  }
+
+  class HeartParticle {
+    constructor(x, y) {
+      this.startX = x;
+      this.startY = y;
+      this.reset();
+    }
+
+    reset() {
+      this.x = this.startX;
+      this.y = this.startY;
+      const angle = Math.random() * 2 * Math.PI;
+      const radius = Math.random() * Math.max(canvas.width, canvas.height);
+      this.tx = this.startX + Math.cos(angle) * radius;
+      this.ty = this.startY + Math.sin(angle) * radius;
+      this.step = 0;
+      this.phase = 'explode';
+      this.explodeStep = 30; // nhanh hơn
+      this.implodeStep = 25; // nhanh hơn
+    }
+
+    update() {
+      const speed = 0.14; // tăng tốc 1 chút
+      if (this.phase === 'explode') {
+        this.x += (this.tx - this.x) * speed;
+        this.y += (this.ty - this.y) * speed;
+        this.step++;
+        if (this.step > this.explodeStep) {
+          this.phase = 'implode';
+          this.step = 0;
+        }
+      } else if (this.phase === 'implode') {
+        this.x += (this.startX - this.x) * speed;
+        this.y += (this.startY - this.y) * speed;
+        this.step++;
+        if (this.step > this.implodeStep) {
+          this.reset();
+        }
+      }
+    }
+
+    draw(ctx) {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 0.5, 0, 2 * Math.PI); // nhỏ hơn
+      ctx.fillStyle = heartColor;
+      ctx.fill();
+    }
+  }
+
+  const particles = heartPoints.map(p => new HeartParticle(p.x, p.y));
+
+  class FlyingHeart {
+    constructor(direction = 'up') {
+      this.size = Math.random() * 14 + 6;
+      this.opacity = Math.random() * 0.5 + 0.5;
+      this.speedY = Math.random() * 2.5 + 2;
+      this.speedX = (Math.random() - 0.5) * 1.2;
+      this.x = Math.random() * window.innerWidth;
+      this.direction = direction;
+      this.y = direction === 'up' ? window.innerHeight + 20 : -20;
+      this.color = ['#ff8fab', '#ffaaff', '#ffcdd2', '#ffd1dc'][Math.floor(Math.random() * 4)];
+    }
+
+    update() {
+      this.y += this.direction === 'up' ? -this.speedY : this.speedY;
+      this.x += this.speedX;
+      this.opacity -= 0.01;
+    }
+
+    draw() {
+      fxCtx.save();
+      fxCtx.globalAlpha = this.opacity;
+      fxCtx.fillStyle = this.color;
+      fxCtx.beginPath();
+      const x = this.x;
+      const y = this.y;
+      const s = this.size;
+      fxCtx.moveTo(x, y);
+      fxCtx.bezierCurveTo(x + s / 2, y - s / 2, x + s, y + s / 3, x, y + s);
+      fxCtx.bezierCurveTo(x - s, y + s / 3, x - s / 2, y - s / 2, x, y);
+      fxCtx.fill();
+      fxCtx.restore();
+    }
+  }
+
+  let flyingHearts = [];
+
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    fxCtx.clearRect(0, 0, effectCanvas.width, effectCanvas.height);
+
+    if (flyingHearts.length < 150) {
+      flyingHearts.push(new FlyingHeart('up'));
+      flyingHearts.push(new FlyingHeart('down'));
+    }
+
+    for (let i = flyingHearts.length - 1; i >= 0; i--) {
+      const heart = flyingHearts[i];
+      heart.update();
+      heart.draw();
+      if (heart.opacity <= 0 || heart.y < -50 || heart.y > window.innerHeight + 50) {
+        flyingHearts.splice(i, 1);
+      }
+    }
+
+    particles.forEach(p => {
+      p.update();
+      p.draw(ctx);
+    });
+
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+</script>
+</body>
+</html>
